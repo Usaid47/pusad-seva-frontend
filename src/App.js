@@ -151,10 +151,10 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: The redirect URL must be the specific callback URL of the backend
-  const redirectUrl = encodeURIComponent(`${FRONTEND_URL}/.auth/login/aad/callback`);
+  // FIXED: The redirect URL should be the root of the frontend app.
+  const redirectUrl = encodeURIComponent(FRONTEND_URL);
   const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${FRONTEND_URL}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
