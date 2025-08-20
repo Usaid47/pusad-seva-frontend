@@ -149,9 +149,10 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Simplify the login URL and make the logout redirect explicit.
-  const loginUrl = `${API_BASE_URL}/.auth/login/aad`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(FRONTEND_URL)}`;
+  // FIXED: Re-add the post_login_redirect_uri to be explicit
+  const redirectUrl = encodeURIComponent(FRONTEND_URL);
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
