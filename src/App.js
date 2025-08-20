@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from 'react';
 
 // --- Configuration ---
-// Replace this with your actual Azure App Service URL
 const API_BASE_URL = 'https://pusadseva-api.azurewebsites.net';
 
 // --- Main App Component ---
 export default function App() {
   const [professionals, setProfessionals] = useState([]);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
-  const [isBooking, setIsBooking] = useState(false); // NEW: State to control the booking modal
+  const [isBooking, setIsBooking] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(null); // NEW: State for the logged-in user
 
-  // --- Data Fetching ---
+  // --- Data & Auth Fetching ---
   useEffect(() => {
+    // NEW: Function to check authentication status
+    const checkUserAuth = async () => {
+      try {
+        const response = await fetch(`/.auth/me`);
+        const data = await response.json();
+        if (data.clientPrincipal) {
+          setUser(data.clientPrincipal);
+        }
+      } catch (err) {
+        console.error("Could not fetch user auth info:", err);
+      }
+    };
+
     const fetchProfessionals = async () => {
       try {
         setIsLoading(true);
@@ -31,6 +44,8 @@ export default function App() {
       }
     };
 
+    // Run both checks when the app loads
+    checkUserAuth();
     fetchProfessionals();
   }, []);
 
@@ -43,8 +58,14 @@ export default function App() {
     setSelectedProfessional(null);
   };
 
-  // NEW: Handlers for the booking modal
   const handleOpenBookingModal = () => {
+    // NEW: Check if user is logged in before allowing booking
+    if (!user) {
+      alert("Please log in to book a service.");
+      // Redirect to login page
+      window.location.href = '/.auth/login/aad';
+      return;
+    }
     setIsBooking(true);
   };
 
@@ -53,17 +74,21 @@ export default function App() {
   };
 
   const handleConfirmBooking = (bookingDetails) => {
-    console.log("Booking Details:", bookingDetails);
-    // In a future step, we will send this data to the API
+    // Add the customer's user ID to the booking details
+    const finalBookingDetails = {
+      ...bookingDetails,
+      customerId: user.userId 
+    };
+    console.log("Booking Details:", finalBookingDetails);
+    // In the NEXT step, we will send this to the API
     handleCloseBookingModal();
-    // Optionally, show a success message
     alert("Booking request sent! (This is a placeholder)");
   };
 
   // --- UI Rendering ---
   return (
     <div className="bg-gray-100 min-h-screen font-sans">
-      <Header />
+      <Header user={user} />
       <main className="p-4 container mx-auto">
         {isLoading && <LoadingSpinner />}
         {error && <ErrorMessage message={error} />}
@@ -73,14 +98,13 @@ export default function App() {
             <ProfessionalDetails 
               professional={selectedProfessional} 
               onBack={handleGoBack}
-              onBookNow={handleOpenBookingModal} // Pass the handler to open the modal
+              onBookNow={handleOpenBookingModal}
             />
           ) : (
             <ProfessionalList professionals={professionals} onSelect={handleSelectProfessional} />
           )
         )}
 
-        {/* NEW: Render the booking modal if isBooking is true */}
         {isBooking && selectedProfessional && (
           <BookingModal 
             professional={selectedProfessional}
@@ -95,13 +119,33 @@ export default function App() {
 
 // --- UI Components ---
 
-const Header = () => (
-  <header className="bg-blue-600 text-white shadow-md">
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold text-center">Pusad Local Services</h1>
-    </div>
-  </header>
-);
+// UPDATED: Header now shows user info and login/logout buttons
+const Header = ({ user }) => {
+  const loginUrl = '/.auth/login/aad'; // 'aad' is for Microsoft accounts
+  const logoutUrl = '/.auth/logout';
+
+  return (
+    <header className="bg-blue-600 text-white shadow-md">
+      <div className="container mx-auto p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Pusad Local Services</h1>
+        <div>
+          {user ? (
+            <div className="flex items-center gap-4">
+              <span className="font-semibold">{user.userDetails}</span>
+              <a href={logoutUrl} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
+                Logout
+              </a>
+            </div>
+          ) : (
+            <a href={loginUrl} className="bg-white text-blue-600 font-bold py-2 px-4 rounded hover:bg-gray-200">
+              Login
+            </a>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+};
 
 const ProfessionalList = ({ professionals, onSelect }) => (
   <div>
@@ -136,7 +180,6 @@ const ProfessionalCard = ({ professional, onSelect }) => (
   </div>
 );
 
-// UPDATED: ProfessionalDetails now receives and uses the onBookNow handler
 const ProfessionalDetails = ({ professional, onBack, onBookNow }) => (
   <div className="bg-white rounded-lg shadow-lg p-6">
     <button onClick={onBack} className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg mb-4 hover:bg-blue-600 transition-colors">
@@ -169,7 +212,6 @@ const ProfessionalDetails = ({ professional, onBack, onBookNow }) => (
   </div>
 );
 
-// --- NEW: BookingModal Component ---
 const BookingModal = ({ professional, onClose, onConfirm }) => {
   const [address, setAddress] = useState('');
   const [dateTime, setDateTime] = useState('');
@@ -229,7 +271,6 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
     </div>
   );
 };
-
 
 const LoadingSpinner = () => (
   <div className="text-center p-10">
