@@ -16,11 +16,12 @@ export default function App() {
   useEffect(() => {
     const checkUserAuth = async () => {
       try {
-        // FIXED: Use the absolute URL for the auth endpoint
+        // Use the absolute URL for the auth endpoint
         const response = await fetch(`${API_BASE_URL}/.auth/me`); 
         const data = await response.json();
-        if (data.clientPrincipal) {
-          setUser(data.clientPrincipal);
+        // The user data is in the first element of the array
+        if (data && data.length > 0 && data[0].user_id) {
+          setUser(data[0]);
         }
       } catch (err) {
         console.error("Could not fetch user auth info:", err);
@@ -60,8 +61,9 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // FIXED: Use the absolute URL for the login redirect
-      window.location.href = `${API_BASE_URL}/.auth/login/aad`; 
+      // FIXED: Add the post_login_redirect_uri parameter
+      const redirectUrl = encodeURIComponent(window.location.href);
+      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`; 
       return;
     }
     setIsBooking(true);
@@ -71,7 +73,6 @@ export default function App() {
     setIsBooking(false);
   };
 
-  // UPDATED: This function now sends the booking to the live API
   const handleConfirmBooking = async (bookingDetails) => {
     if (!user) {
       alert("You must be logged in to confirm a booking.");
@@ -80,7 +81,7 @@ export default function App() {
 
     const finalBookingDetails = {
       ...bookingDetails,
-      customerId: user.userId, // Use the logged-in user's ID
+      customerId: user.user_id, // Use the correct user_id field
     };
 
     try {
@@ -90,12 +91,10 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(finalBookingDetails),
-        // This line is crucial for sending authentication cookies
         credentials: 'include', 
       });
 
       if (!response.ok) {
-        // Try to get more specific error info from the API response
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to create the booking.');
       }
@@ -147,9 +146,10 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Use absolute URLs for login and logout
-  const loginUrl = `${API_BASE_URL}/.auth/login/aad`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout`;
+  // FIXED: Add redirect parameters to login and logout URLs
+  const redirectUrl = encodeURIComponent(window.location.origin);
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
@@ -158,7 +158,7 @@ const Header = ({ user }) => {
         <div>
           {user ? (
             <div className="flex items-center gap-4">
-              <span className="font-semibold">{user.userDetails}</span>
+              <span className="font-semibold">{user.user_id}</span>
               <a href={logoutUrl} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
                 Logout
               </a>
