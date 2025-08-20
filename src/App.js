@@ -10,14 +10,14 @@ export default function App() {
   const [isBooking, setIsBooking] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [user, setUser] = useState(null); // NEW: State for the logged-in user
+  const [user, setUser] = useState(null);
 
   // --- Data & Auth Fetching ---
   useEffect(() => {
-    // NEW: Function to check authentication status
     const checkUserAuth = async () => {
       try {
-        const response = await fetch(`/.auth/me`);
+        // NOTE: For Static Web Apps, the /.auth/me endpoint is relative to the app's domain.
+        const response = await fetch(`/.auth/me`); 
         const data = await response.json();
         if (data.clientPrincipal) {
           setUser(data.clientPrincipal);
@@ -44,7 +44,6 @@ export default function App() {
       }
     };
 
-    // Run both checks when the app loads
     checkUserAuth();
     fetchProfessionals();
   }, []);
@@ -59,11 +58,10 @@ export default function App() {
   };
 
   const handleOpenBookingModal = () => {
-    // NEW: Check if user is logged in before allowing booking
     if (!user) {
       alert("Please log in to book a service.");
-      // Redirect to login page
-      window.location.href = '/.auth/login/aad';
+      // For Static Web Apps, the login URL is relative. 'aad' is for Microsoft Entra ID.
+      window.location.href = '/.auth/login/aad'; 
       return;
     }
     setIsBooking(true);
@@ -73,16 +71,43 @@ export default function App() {
     setIsBooking(false);
   };
 
-  const handleConfirmBooking = (bookingDetails) => {
-    // Add the customer's user ID to the booking details
+  // UPDATED: This function now sends the booking to the live API
+  const handleConfirmBooking = async (bookingDetails) => {
+    if (!user) {
+      alert("You must be logged in to confirm a booking.");
+      return;
+    }
+
     const finalBookingDetails = {
       ...bookingDetails,
-      customerId: user.userId 
+      customerId: user.userId, // Use the logged-in user's ID
     };
-    console.log("Booking Details:", finalBookingDetails);
-    // In the NEXT step, we will send this to the API
-    handleCloseBookingModal();
-    alert("Booking request sent! (This is a placeholder)");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(finalBookingDetails),
+      });
+
+      if (!response.ok) {
+        // Try to get more specific error info from the API response
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create the booking.');
+      }
+
+      const result = await response.json();
+      console.log("Booking successful:", result);
+      alert("Booking created successfully!");
+
+    } catch (err) {
+      console.error("Booking failed:", err);
+      alert(`Booking failed: ${err.message}`);
+    } finally {
+      handleCloseBookingModal();
+    }
   };
 
   // --- UI Rendering ---
@@ -119,9 +144,8 @@ export default function App() {
 
 // --- UI Components ---
 
-// UPDATED: Header now shows user info and login/logout buttons
 const Header = ({ user }) => {
-  const loginUrl = '/.auth/login/aad'; // 'aad' is for Microsoft accounts
+  const loginUrl = '/.auth/login/aad';
   const logoutUrl = '/.auth/logout';
 
   return (
