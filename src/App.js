@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 
 // --- Configuration ---
 const API_BASE_URL = 'https://pusadseva-api.azurewebsites.net';
+// NEW: Define the frontend URL for redirects
+const FRONTEND_URL = 'https://purple-field-07c264000.1.azurestaticapps.net';
 
 // --- Main App Component ---
 export default function App() {
@@ -18,7 +20,7 @@ export default function App() {
       try {
         const response = await fetch(`${API_BASE_URL}/.auth/me`); 
         const data = await response.json();
-        if (data && data.length > 0 && data[0].user_id) {
+        if (data && data[0] && data[0].user_id) {
           const claims = data[0].user_claims.find(c => c.typ === 'name');
           const userData = {
             ...data[0],
@@ -64,8 +66,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // FIXED: Use window.location.origin for a more reliable redirect base
-      const redirectUrl = encodeURIComponent(window.location.origin);
+      // Use the current page's full URL as the redirect target
+      const redirectUrl = encodeURIComponent(window.location.href);
       window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`; 
       return;
     }
@@ -149,10 +151,10 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Use window.location.origin for a more reliable redirect base
-  const redirectUrl = encodeURIComponent(window.location.origin);
+  // FIXED: The redirect URL must be the specific callback URL of the backend
+  const redirectUrl = encodeURIComponent(`${FRONTEND_URL}/.auth/login/aad/callback`);
   const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${FRONTEND_URL}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
