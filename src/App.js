@@ -64,8 +64,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // Use the current page's full URL as the redirect target
-      const redirectUrl = encodeURIComponent(window.location.href);
+      // FIXED: Use window.location.origin for a more reliable redirect base
+      const redirectUrl = encodeURIComponent(window.location.origin);
       window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`; 
       return;
     }
@@ -149,8 +149,8 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // Use the current page's full URL as the redirect target
-  const redirectUrl = encodeURIComponent(window.location.href);
+  // FIXED: Use window.location.origin for a more reliable redirect base
+  const redirectUrl = encodeURIComponent(window.location.origin);
   const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
   const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
 
