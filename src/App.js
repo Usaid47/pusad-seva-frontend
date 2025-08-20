@@ -16,12 +16,16 @@ export default function App() {
   useEffect(() => {
     const checkUserAuth = async () => {
       try {
-        // Use the absolute URL for the auth endpoint
         const response = await fetch(`${API_BASE_URL}/.auth/me`); 
         const data = await response.json();
-        // The user data is in the first element of the array
         if (data && data.length > 0 && data[0].user_id) {
-          setUser(data[0]);
+          // Extract a display name from the claims
+          const claims = data[0].user_claims.find(c => c.typ === 'name');
+          const userData = {
+            ...data[0],
+            displayName: claims ? claims.val : data[0].user_id,
+          };
+          setUser(userData);
         }
       } catch (err) {
         console.error("Could not fetch user auth info:", err);
@@ -61,8 +65,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // FIXED: Add the post_login_redirect_uri parameter
-      const redirectUrl = encodeURIComponent(window.location.href);
+      // FIXED: Use window.location.origin for a cleaner redirect
+      const redirectUrl = encodeURIComponent(window.location.origin);
       window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`; 
       return;
     }
@@ -81,7 +85,7 @@ export default function App() {
 
     const finalBookingDetails = {
       ...bookingDetails,
-      customerId: user.user_id, // Use the correct user_id field
+      customerId: user.user_id,
     };
 
     try {
@@ -146,7 +150,6 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Add redirect parameters to login and logout URLs
   const redirectUrl = encodeURIComponent(window.location.origin);
   const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
   const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
@@ -158,7 +161,7 @@ const Header = ({ user }) => {
         <div>
           {user ? (
             <div className="flex items-center gap-4">
-              <span className="font-semibold">{user.user_id}</span>
+              <span className="font-semibold">{user.displayName}</span>
               <a href={logoutUrl} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
                 Logout
               </a>
