@@ -16,8 +16,8 @@ export default function App() {
   useEffect(() => {
     const checkUserAuth = async () => {
       try {
-        // NOTE: For Static Web Apps, the /.auth/me endpoint is relative to the app's domain.
-        const response = await fetch(`/.auth/me`); 
+        // FIXED: Use the absolute URL for the auth endpoint
+        const response = await fetch(`${API_BASE_URL}/.auth/me`); 
         const data = await response.json();
         if (data.clientPrincipal) {
           setUser(data.clientPrincipal);
@@ -60,8 +60,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // For Static Web Apps, the login URL is relative. 'aad' is for Microsoft Entra ID.
-      window.location.href = '/.auth/login/aad'; 
+      // FIXED: Use the absolute URL for the login redirect
+      window.location.href = `${API_BASE_URL}/.auth/login/aad`; 
       return;
     }
     setIsBooking(true);
@@ -90,6 +90,8 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(finalBookingDetails),
+        // This line is crucial for sending authentication cookies
+        credentials: 'include', 
       });
 
       if (!response.ok) {
@@ -145,8 +147,9 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  const loginUrl = '/.auth/login/aad';
-  const logoutUrl = '/.auth/logout';
+  // FIXED: Use absolute URLs for login and logout
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
