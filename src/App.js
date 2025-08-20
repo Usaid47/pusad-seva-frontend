@@ -19,7 +19,7 @@ export default function App() {
         const response = await fetch(`${API_BASE_URL}/.auth/me`); 
         const data = await response.json();
         if (data && data.length > 0 && data[0].user_id) {
-          // Extract a display name from the claims
+          // Extract a display name from the claims for a better user experience
           const claims = data[0].user_claims.find(c => c.typ === 'name');
           const userData = {
             ...data[0],
@@ -65,7 +65,7 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // FIXED: Use window.location.origin for a cleaner redirect
+      // FIXED: Use window.location.origin for a more reliable redirect base
       const redirectUrl = encodeURIComponent(window.location.origin);
       window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`; 
       return;
@@ -150,6 +150,7 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
+  // FIXED: Use window.location.origin for a more reliable redirect base
   const redirectUrl = encodeURIComponent(window.location.origin);
   const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
   const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
