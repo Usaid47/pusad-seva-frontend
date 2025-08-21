@@ -11,7 +11,7 @@ function buildFrontendReturnUrl() {
     const path = window.location.pathname || '/';
     const search = window.location.search || '';
     return base + path + search;
-  } catch {
+  } catch (e) {
     return FRONTEND_URL + '/';
   }
 }
@@ -21,20 +21,16 @@ function buildLoginUrl() {
   const target = encodeURIComponent(buildFrontendReturnUrl());
   // Primary (most commonly honored)
   const primary = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${target}`;
-  // Fallback (some slots honor this instead)
-  const fallback = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${target}`;
-  // We’ll try primary; if the platform ignores it, we can toggle below
+  // If your slot only honors "..._url", change the return to fallback.
+  // const fallback = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${target}`;
   return primary;
-  // If you confirm your slot only honors "..._url", swap to:
-  // return fallback;
 }
 
 // Logout redirect back to SWA
 function buildLogoutUrl() {
   const home = encodeURIComponent(FRONTEND_URL.replace(/\/?$/, '/'));
+  // If your slot ignores "..._uri", change to post_logout_redirect_url
   return `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${home}`;
-  // If your slot ignores "..._uri", use:
-  // return `${API_BASE_URL}/.auth/logout?post_logout_redirect_url=${home}`;
 }
 
 export default function App() {
@@ -54,7 +50,7 @@ export default function App() {
           const data = await response.json();
           if (Array.isArray(data) && data[0] && data.user_id) {
             const claims = data.user_claims || [];
-            const nameClaim = claims.find(c => c.typ === 'name' || c.typ === 'preferred_username');
+            const nameClaim = claims.find((c) => c.typ === 'name' || c.typ === 'preferred_username');
             setUser({
               ...data,
               displayName: nameClaim ? nameClaim.val : data.user_id,
@@ -76,7 +72,7 @@ export default function App() {
           throw new Error('Failed to fetch data from the server.');
         }
         const data = await response.json();
-        setProfessionals(data || []);
+        setProfessionals(Array.isArray(data) ? data : []);
       } catch (err) {
         setError(err.message || 'Failed to load data.');
       } finally {
@@ -122,8 +118,10 @@ export default function App() {
         let message = 'Failed to create the booking.';
         try {
           const err = await response.json();
-          message = err.message || message;
-        } catch {}
+          if (err && err.message) message = err.message;
+        } catch (e) {
+          // ignore
+        }
         throw new Error(message);
       }
 
@@ -209,72 +207,80 @@ const ProfessionalList = ({ professionals, onSelect }) => (
   </div>
 );
 
-const ProfessionalCard = ({ professional, onSelect }) => (
-  <div
-    className="bg-white rounded-lg shadow-lg p-4 flex items-center cursor-pointer transition-transform transform hover:scale-105"
-    onClick={() => onSelect(professional)}
-  >
-    <img
-      src={professional.ProfilePictureURL || `https://placehold.co/80x80/E2E8F0/4A5568?text=${professional.FirstName?.[0] || 'P'}`}
-      alt={`${professional.FirstName} ${professional.LastName}`}
-      className="w-20 h-20 rounded-full mr-4 border-2 border-blue-200"
-      onError={(e) => {
-        e.target.onerror = null;
-        e.target.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${professional.FirstName?. || 'P'}`;
-      }}
-    />
-    <div>
-      <h3 className="text-lg font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h3>
-      <p className="text-blue-500">{professional.ServiceType}</p>
-      <div className="flex items-center mt-1">
-        <span className="text-yellow-500">★</span>
-        <span className="text-gray-600 ml-1">
-          {professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'}
-        </span>
-      </div>
-    </div>
-  </div>
-);
-
-const ProfessionalDetails = ({ professional, onBack, onBookNow }) => (
-  <div className="bg-white rounded-lg shadow-lg p-6">
-    <button
-      onClick={onBack}
-      className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg mb-4 hover:bg-blue-600 transition-colors"
+const ProfessionalCard = ({ professional, onSelect }) => {
+  const initial = professional && professional.FirstName ? professional.FirstName.charAt(0) : 'P';
+  const fallbackImg = `https://placehold.co/80x80/E2E8F0/4A5568?text=${initial}`;
+  return (
+    <div
+      className="bg-white rounded-lg shadow-lg p-4 flex items-center cursor-pointer transition-transform transform hover:scale-105"
+      onClick={() => onSelect(professional)}
     >
-      &larr; Back to List
-    </button>
-    <div className="flex flex-col items-center">
       <img
-        src={professional.ProfilePictureURL || `https://placehold.co/128x128/E2E8F0/4A5568?text=${professional.FirstName?.[0] || 'P'}`}
+        src={professional.ProfilePictureURL || fallbackImg}
         alt={`${professional.FirstName} ${professional.LastName}`}
-        className="w-32 h-32 rounded-full mb-4 border-4 border-blue-300"
+        className="w-20 h-20 rounded-full mr-4 border-2 border-blue-200"
         onError={(e) => {
-          e.target.onerror = null;
-          e.target.src = `https://placehold.co/128x128/E2E8F0/4A5568?text=${professional.FirstName?. || 'P'}`;
+          e.currentTarget.onerror = null;
+          e.currentTarget.src = fallbackImg;
         }}
       />
-      <h2 className="text-2xl font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h2>
-      <p className="text-lg text-blue-600 font-semibold">{professional.ServiceType}</p>
-      <div className="flex items-center my-2">
-        <span className="text-yellow-500 text-xl">★</span>
-        <span className="text-gray-700 ml-2 text-lg">
-          {professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'} / 5.0
-        </span>
-      </div>
-      {professional.IsVerified && (
-        <div className="bg-green-100 text-green-800 text-sm font-semibold px-3 py-1 rounded-full">
-          Verified Professional
+      <div>
+        <h3 className="text-lg font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h3>
+        <p className="text-blue-500">{professional.ServiceType}</p>
+        <div className="flex items-center mt-1">
+          <span className="text-yellow-500">★</span>
+          <span className="text-gray-600 ml-1">
+            {professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'}
+          </span>
         </div>
-      )}
-      <div className="mt-6 w-full text-center">
-        <button onClick={onBookNow} className="bg-green-500 text-white font-bold py-3 px-8 rounded-lg w-full hover:bg-green-600 transition-colors">
-          Book Now
-        </button>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+const ProfessionalDetails = ({ professional, onBack, onBookNow }) => {
+  const initial = professional && professional.FirstName ? professional.FirstName.charAt(0) : 'P';
+  const fallbackImg = `https://placehold.co/128x128/E2E8F0/4A5568?text=${initial}`;
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <button
+        onClick={onBack}
+        className="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg mb-4 hover:bg-blue-600 transition-colors"
+      >
+        &larr; Back to List
+      </button>
+      <div className="flex flex-col items-center">
+        <img
+          src={professional.ProfilePictureURL || fallbackImg}
+          alt={`${professional.FirstName} ${professional.LastName}`}
+          className="w-32 h-32 rounded-full mb-4 border-4 border-blue-300"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = fallbackImg;
+          }}
+        />
+        <h2 className="text-2xl font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h2>
+        <p className="text-lg text-blue-600 font-semibold">{professional.ServiceType}</p>
+        <div className="flex items-center my-2">
+          <span className="text-yellow-500 text-xl">★</span>
+          <span className="text-gray-700 ml-2 text-lg">
+            {professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'} / 5.0
+          </span>
+        </div>
+        {professional.IsVerified ? (
+          <div className="bg-green-100 text-green-800 text-sm font-semibold px-3 py-1 rounded-full">
+            Verified Professional
+          </div>
+        ) : null}
+        <div className="mt-6 w-full text-center">
+          <button onClick={onBookNow} className="bg-green-500 text-white font-bold py-3 px-8 rounded-lg w-full hover:bg-green-600 transition-colors">
+            Book Now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const BookingModal = ({ professional, onClose, onConfirm }) => {
   const [address, setAddress] = useState('');
@@ -327,10 +333,17 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
             />
           </div>
           <div className="flex justify-end gap-4">
-            <button type="button" onClick={onClose} className="bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors">
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+            >
               Cancel
             </button>
-            <button type="submit" className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
+            <button
+              type="submit"
+              className="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition-colors"
+            >
               Confirm Booking
             </button>
           </div>
