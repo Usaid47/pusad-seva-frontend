@@ -17,18 +17,17 @@ export default function App() {
   useEffect(() => {
     // Handle the post-login redirect from the auth service
     if (window.location.hash.includes("#token=")) {
-      // Clean the URL and reload the page to allow the auth cookie to be set
       window.location.hash = "";
       window.location.reload();
-      return; // Stop further execution on this render
+      return;
     }
 
     const checkUserAuth = async () => {
       try {
+        // FIXED: Added { credentials: 'include' } to send the auth cookie
         const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
-          // FIXED: Correctly check for user_id within the first element of the data array
           if (data && data[0] && data[0].user_id) {
             const claims = (data[0].user_claims || []);
             const nameClaim = claims.find(c => c.typ === 'name');
@@ -48,6 +47,7 @@ export default function App() {
       try {
         setIsLoading(true);
         setError(null);
+        // Add credentials here as well for consistency
         const response = await fetch(`${API_BASE_URL}/api/professionals`, { credentials: 'include' });
         if (!response.ok) {
           throw new Error('Failed to fetch data from the server.');
