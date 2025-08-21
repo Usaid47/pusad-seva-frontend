@@ -4,35 +4,7 @@ import React, { useState, useEffect } from 'react';
 const API_BASE_URL = 'https://pusadseva-api.azurewebsites.net';
 const FRONTEND_URL = 'https://purple-field-07c264000.1.azurestaticapps.net';
 
-// Build a safe return URL to the current page on the frontend
-function buildFrontendReturnUrl() {
-  try {
-    const base = FRONTEND_URL.replace(/\/$/, '');
-    const path = window.location.pathname || '/';
-    const search = window.location.search || '';
-    return base + path + search;
-  } catch (e) {
-    return FRONTEND_URL + '/';
-  }
-}
-
-// Compose Easy Auth login URL with both param options (uri first, url as fallback)
-function buildLoginUrl() {
-  const target = encodeURIComponent(buildFrontendReturnUrl());
-  // Primary (most commonly honored)
-  const primary = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${target}`;
-  // If your slot only honors "..._url", change the return to fallback.
-  // const fallback = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${target}`;
-  return primary;
-}
-
-// Logout redirect back to SWA
-function buildLogoutUrl() {
-  const home = encodeURIComponent(FRONTEND_URL.replace(/\/?$/, '/'));
-  // If your slot ignores "..._uri", change to post_logout_redirect_url
-  return `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${home}`;
-}
-
+// --- Main App Component ---
 export default function App() {
   const [professionals, setProfessionals] = useState([]);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
@@ -43,23 +15,32 @@ export default function App() {
 
   // --- Data & Auth Fetching ---
   useEffect(() => {
+    // FIXED: Handle the post-login redirect from the auth service
+    if (window.location.hash.includes("#token=")) {
+      // Clean the URL and reload the page to allow the auth cookie to be set
+      window.location.hash = "";
+      // The reload is important to trigger a clean auth check
+      window.location.reload();
+      return; // Stop further execution on this render
+    }
+
     const checkUserAuth = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
-          if (Array.isArray(data) && data[0] && data.user_id) {
-            const claims = data.user_claims || [];
-            const nameClaim = claims.find((c) => c.typ === 'name' || c.typ === 'preferred_username');
-            setUser({
-              ...data,
-              displayName: nameClaim ? nameClaim.val : data.user_id,
-            });
+          if (data && data[0] && data[0].user_id) {
+            const claims = (data[0].user_claims || []);
+            const nameClaim = claims.find(c => c.typ === 'name');
+            const userData = {
+              ...data[0],
+              displayName: nameClaim ? nameClaim.val : data[0].user_id,
+            };
+            setUser(userData);
           }
         }
       } catch (err) {
-        // keep user null
-        console.error('Auth check failed:', err);
+        console.error("Could not fetch user auth info:", err);
       }
     };
 
@@ -72,9 +53,9 @@ export default function App() {
           throw new Error('Failed to fetch data from the server.');
         }
         const data = await response.json();
-        setProfessionals(Array.isArray(data) ? data : []);
+        setProfessionals(data);
       } catch (err) {
-        setError(err.message || 'Failed to load data.');
+        setError(err.message);
       } finally {
         setIsLoading(false);
       }
@@ -85,57 +66,71 @@ export default function App() {
   }, []);
 
   // --- Event Handlers ---
-  const handleSelectProfessional = (professional) => setSelectedProfessional(professional);
-  const handleGoBack = () => setSelectedProfessional(null);
+  const handleSelectProfessional = (professional) => {
+    setSelectedProfessional(professional);
+  };
+
+  const handleGoBack = () => {
+    setSelectedProfessional(null);
+  };
 
   const handleOpenBookingModal = () => {
     if (!user) {
-      alert('Please log in to book a service.');
-      window.location.href = buildLoginUrl();
+      alert("Please log in to book a service.");
+      const redirectUrl = encodeURIComponent(window.location.href);
+      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
       return;
     }
     setIsBooking(true);
   };
 
-  const handleCloseBookingModal = () => setIsBooking(false);
+  const handleCloseBookingModal = () => {
+    setIsBooking(false);
+  };
 
   const handleConfirmBooking = async (bookingDetails) => {
     if (!user) {
-      alert('You must be logged in to confirm a booking.');
+      alert("You must be logged in to confirm a booking.");
       return;
     }
-    const finalBookingDetails = { ...bookingDetails, customerId: user.user_id };
+
+    const finalBookingDetails = {
+      ...bookingDetails,
+      customerId: user.user_id,
+    };
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(finalBookingDetails),
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        let message = 'Failed to create the booking.';
+        let errorMessage = 'Failed to create the booking.';
         try {
-          const err = await response.json();
-          if (err && err.message) message = err.message;
-        } catch (e) {
-          // ignore
-        }
-        throw new Error(message);
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
-      console.log('Booking successful:', result);
-      alert('Booking created successfully!');
+      console.log("Booking successful:", result);
+      alert("Booking created successfully!");
+
     } catch (err) {
-      console.error('Booking failed:', err);
+      console.error("Booking failed:", err);
       alert(`Booking failed: ${err.message}`);
     } finally {
       handleCloseBookingModal();
     }
   };
 
+  // --- UI Rendering ---
   return (
     <div className="bg-gray-100 min-h-screen font-sans">
       <Header user={user} />
@@ -170,8 +165,9 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  const loginUrl = buildLoginUrl();
-  const logoutUrl = buildLogoutUrl();
+  const redirectUrl = encodeURIComponent(FRONTEND_URL);
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
@@ -200,7 +196,7 @@ const ProfessionalList = ({ professionals, onSelect }) => (
   <div>
     <h2 className="text-xl font-semibold text-gray-700 mb-4">Verified Professionals</h2>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {professionals.map((prof) => (
+      {professionals.map(prof => (
         <ProfessionalCard key={prof.ProfessionalID} professional={prof} onSelect={onSelect} />
       ))}
     </div>
@@ -208,7 +204,7 @@ const ProfessionalList = ({ professionals, onSelect }) => (
 );
 
 const ProfessionalCard = ({ professional, onSelect }) => {
-  const initial = professional && professional.FirstName ? professional.FirstName.charAt(0) : 'P';
+  const initial = professional?.FirstName?.charAt(0) || 'P';
   const fallbackImg = `https://placehold.co/80x80/E2E8F0/4A5568?text=${initial}`;
   return (
     <div
@@ -219,19 +215,14 @@ const ProfessionalCard = ({ professional, onSelect }) => {
         src={professional.ProfilePictureURL || fallbackImg}
         alt={`${professional.FirstName} ${professional.LastName}`}
         className="w-20 h-20 rounded-full mr-4 border-2 border-blue-200"
-        onError={(e) => {
-          e.currentTarget.onerror = null;
-          e.currentTarget.src = fallbackImg;
-        }}
+        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = fallbackImg; }}
       />
       <div>
         <h3 className="text-lg font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h3>
         <p className="text-blue-500">{professional.ServiceType}</p>
         <div className="flex items-center mt-1">
           <span className="text-yellow-500">★</span>
-          <span className="text-gray-600 ml-1">
-            {professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'}
-          </span>
+          <span className="text-gray-600 ml-1">{professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'}</span>
         </div>
       </div>
     </div>
@@ -239,8 +230,8 @@ const ProfessionalCard = ({ professional, onSelect }) => {
 };
 
 const ProfessionalDetails = ({ professional, onBack, onBookNow }) => {
-  const initial = professional && professional.FirstName ? professional.FirstName.charAt(0) : 'P';
-  const fallbackImg = `https://placehold.co/128x128/E2E8F0/4A5568?text=${initial}`;
+    const initial = professional?.FirstName?.charAt(0) || 'P';
+    const fallbackImg = `https://placehold.co/128x128/E2E8F0/4A5568?text=${initial}`;
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <button
@@ -254,24 +245,19 @@ const ProfessionalDetails = ({ professional, onBack, onBookNow }) => {
           src={professional.ProfilePictureURL || fallbackImg}
           alt={`${professional.FirstName} ${professional.LastName}`}
           className="w-32 h-32 rounded-full mb-4 border-4 border-blue-300"
-          onError={(e) => {
-            e.currentTarget.onerror = null;
-            e.currentTarget.src = fallbackImg;
-          }}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = fallbackImg; }}
         />
         <h2 className="text-2xl font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h2>
         <p className="text-lg text-blue-600 font-semibold">{professional.ServiceType}</p>
         <div className="flex items-center my-2">
           <span className="text-yellow-500 text-xl">★</span>
-          <span className="text-gray-700 ml-2 text-lg">
-            {professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'} / 5.0
-          </span>
+          <span className="text-gray-700 ml-2 text-lg">{professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'} / 5.0</span>
         </div>
-        {professional.IsVerified ? (
+        {professional.IsVerified && (
           <div className="bg-green-100 text-green-800 text-sm font-semibold px-3 py-1 rounded-full">
             Verified Professional
           </div>
-        ) : null}
+        )}
         <div className="mt-6 w-full text-center">
           <button onClick={onBookNow} className="bg-green-500 text-white font-bold py-3 px-8 rounded-lg w-full hover:bg-green-600 transition-colors">
             Book Now
@@ -289,7 +275,7 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!address || !dateTime) {
-      alert('Please fill in both address and date/time.');
+      alert("Please fill in both address and date/time.");
       return;
     }
     onConfirm({
@@ -306,9 +292,7 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
         <h2 className="text-2xl font-bold text-gray-800 mb-4">Book {professional.FirstName}</h2>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label htmlFor="address" className="block text-gray-700 font-semibold mb-2">
-              Address
-            </label>
+            <label htmlFor="address" className="block text-gray-700 font-semibold mb-2">Address</label>
             <input
               type="text"
               id="address"
@@ -320,9 +304,7 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
             />
           </div>
           <div className="mb-6">
-            <label htmlFor="dateTime" className="block text-gray-700 font-semibold mb-2">
-              Preferred Date & Time
-            </label>
+            <label htmlFor="dateTime" className="block text-gray-700 font-semibold mb-2">Preferred Date & Time</label>
             <input
               type="datetime-local"
               id="dateTime"
@@ -361,8 +343,6 @@ const LoadingSpinner = () => (
 
 const ErrorMessage = ({ message }) => (
   <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-center">
-    <p>
-      <strong>Error:</strong> {message}
-    </p>
+    <p><strong>Error:</strong> {message}</p>
   </div>
 );
