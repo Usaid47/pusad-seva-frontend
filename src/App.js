@@ -65,8 +65,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // This will now use the server-configured redirect
-      window.location.href = `${API_BASE_URL}/.auth/login/aad`; 
+      const redirectUrl = encodeURIComponent(window.location.href);
+      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`; 
       return;
     }
     setIsBooking(true);
@@ -149,9 +149,10 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Simplified the login and logout URLs. The redirect is now handled by the server configuration.
-  const loginUrl = `${API_BASE_URL}/.auth/login/aad`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout`;
+  // FIXED: The redirect URL must be the specific callback URL.
+  const redirectUrl = encodeURIComponent(`${FRONTEND_URL}/.auth/login/aad/callback`);
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${FRONTEND_URL}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
@@ -177,7 +178,6 @@ const Header = ({ user }) => {
 };
 
 // ... (The rest of the components remain the same)
-// ... ProfessionalList, ProfessionalCard, ProfessionalDetails, BookingModal, etc.
 const ProfessionalList = ({ professionals, onSelect }) => (
   <div>
     <h2 className="text-xl font-semibold text-gray-700 mb-4">Verified Professionals</h2>
