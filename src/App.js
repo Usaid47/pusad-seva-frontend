@@ -17,15 +17,17 @@ export default function App() {
   useEffect(() => {
     const checkUserAuth = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/.auth/me`); 
-        const data = await response.json();
-        if (data && data[0] && data[0].user_id) {
-          const claims = data[0].user_claims.find(c => c.typ === 'name');
-          const userData = {
-            ...data[0],
-            displayName: claims ? claims.val : data[0].user_id,
-          };
-          setUser(userData);
+        const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' }); 
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data[0] && data[0].user_id) {
+            const claims = data[0].user_claims.find(c => c.typ === 'name');
+            const userData = {
+              ...data[0],
+              displayName: claims ? claims.val : data[0].user_id,
+            };
+            setUser(userData);
+          }
         }
       } catch (err) {
         console.error("Could not fetch user auth info:", err);
@@ -36,7 +38,7 @@ export default function App() {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetch(`${API_BASE_URL}/api/professionals`);
+        const response = await fetch(`${API_BASE_URL}/api/professionals`, { credentials: 'include' });
         if (!response.ok) {
           throw new Error('Failed to fetch data from the server.');
         }
@@ -65,7 +67,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      window.location.href = `${API_BASE_URL}/.auth/login/aad`; 
+      const returnUrl = FRONTEND_URL + window.location.pathname + window.location.search;
+      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${encodeURIComponent(returnUrl)}`;
       return;
     }
     setIsBooking(true);
@@ -148,9 +151,8 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Simplified the login and logout URLs. The redirect is now handled by the server configuration.
-  const loginUrl = `${API_BASE_URL}/.auth/login/aad`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout`;
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${encodeURIComponent(FRONTEND_URL + '/')}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(FRONTEND_URL + '/')}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
