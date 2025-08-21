@@ -15,11 +15,10 @@ export default function App() {
 
   // --- Data & Auth Fetching ---
   useEffect(() => {
-    // FIXED: Handle the post-login redirect from the auth service
+    // Handle the post-login redirect from the auth service
     if (window.location.hash.includes("#token=")) {
       // Clean the URL and reload the page to allow the auth cookie to be set
       window.location.hash = "";
-      // The reload is important to trigger a clean auth check
       window.location.reload();
       return; // Stop further execution on this render
     }
@@ -29,6 +28,7 @@ export default function App() {
         const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
+          // FIXED: Correctly check for user_id within the first element of the data array
           if (data && data[0] && data[0].user_id) {
             const claims = (data[0].user_claims || []);
             const nameClaim = claims.find(c => c.typ === 'name');
