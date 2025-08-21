@@ -4,6 +4,19 @@ import React, { useState, useEffect } from 'react';
 const API_BASE_URL = 'https://pusadseva-api.azurewebsites.net';
 const FRONTEND_URL = 'https://purple-field-07c264000.1.azurestaticapps.net';
 
+// Utility to build a safe return URL to the current page on the frontend
+function buildFrontendReturnUrl() {
+  try {
+    // In SWA, window.location.* will be on the frontend origin
+    const path = window.location.pathname || '/';
+    const search = window.location.search || '';
+    return FRONTEND_URL.replace(/\/$/, '') + path + search;
+  } catch {
+    // Fallback to home
+    return FRONTEND_URL + '/';
+  }
+}
+
 // --- Main App Component ---
 export default function App() {
   const [professionals, setProfessionals] = useState([]);
@@ -17,19 +30,21 @@ export default function App() {
   useEffect(() => {
     const checkUserAuth = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' }); 
+        const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
-          if (data && data[0] && data[0].user_id) {
-            const claims = data[0].user_claims.find(c => c.typ === 'name');
+          if (data && data[0] && data.user_id) {
+            const claims = (data.user_claims || []);
+            const nameClaim = claims.find(c => c.typ === 'name');
             const userData = {
-              ...data[0],
-              displayName: claims ? claims.val : data[0].user_id,
+              ...data,
+              displayName: nameClaim ? nameClaim.val : data.user_id,
             };
             setUser(userData);
           }
         }
       } catch (err) {
+        // Silent fail; user remains null
         console.error("Could not fetch user auth info:", err);
       }
     };
@@ -67,8 +82,11 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      const returnUrl = FRONTEND_URL + window.location.pathname + window.location.search;
-      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${encodeURIComponent(returnUrl)}`;
+      // Force API Easy Auth to redirect back to the current frontend page
+      const postLogin = encodeURIComponent(buildFrontendReturnUrl());
+      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${postLogin}`;
+      // If this param name doesn't work in your environment, try:
+      // window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${postLogin}`;
       return;
     }
     setIsBooking(true);
@@ -96,12 +114,18 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(finalBookingDetails),
-        credentials: 'include', 
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create the booking.');
+        let errorMessage = 'Failed to create the booking.';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // Ignore JSON parse errors
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -123,11 +147,11 @@ export default function App() {
       <main className="p-4 container mx-auto">
         {isLoading && <LoadingSpinner />}
         {error && <ErrorMessage message={error} />}
-        
+
         {!isLoading && !error && (
           selectedProfessional ? (
-            <ProfessionalDetails 
-              professional={selectedProfessional} 
+            <ProfessionalDetails
+              professional={selectedProfessional}
               onBack={handleGoBack}
               onBookNow={handleOpenBookingModal}
             />
@@ -137,7 +161,7 @@ export default function App() {
         )}
 
         {isBooking && selectedProfessional && (
-          <BookingModal 
+          <BookingModal
             professional={selectedProfessional}
             onClose={handleCloseBookingModal}
             onConfirm={handleConfirmBooking}
@@ -151,7 +175,11 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${encodeURIComponent(FRONTEND_URL + '/')}`;
+  // Always return to frontend after login/logout
+  const returnUrl = encodeURIComponent(buildFrontendReturnUrl());
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_url=${returnUrl}`;
+  // If the above doesn't work in your slot, try `post_login_redirect_uri=`
+  // const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${returnUrl}`;
   const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${encodeURIComponent(FRONTEND_URL + '/')}`;
 
   return (
@@ -177,7 +205,6 @@ const Header = ({ user }) => {
   );
 };
 
-// ... (The rest of the components remain the same)
 const ProfessionalList = ({ professionals, onSelect }) => (
   <div>
     <h2 className="text-xl font-semibold text-gray-700 mb-4">Verified Professionals</h2>
@@ -190,22 +217,22 @@ const ProfessionalList = ({ professionals, onSelect }) => (
 );
 
 const ProfessionalCard = ({ professional, onSelect }) => (
-  <div 
+  <div
     className="bg-white rounded-lg shadow-lg p-4 flex items-center cursor-pointer transition-transform transform hover:scale-105"
     onClick={() => onSelect(professional)}
   >
-    <img 
-      src={professional.ProfilePictureURL || `https://placehold.co/80x80/E2E8F0/4A5568?text=${professional.FirstName.charAt(0)}`} 
+    <img
+      src={professional.ProfilePictureURL || `https://placehold.co/80x80/E2E8F0/4A5568?text=${professional.FirstName?.charAt(0) || 'P'}`}
       alt={`${professional.FirstName} ${professional.LastName}`}
       className="w-20 h-20 rounded-full mr-4 border-2 border-blue-200"
-      onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${professional.FirstName.charAt(0)}`; }}
+      onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${professional.FirstName?.charAt(0) || 'P'}`; }}
     />
     <div>
       <h3 className="text-lg font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h3>
       <p className="text-blue-500">{professional.ServiceType}</p>
       <div className="flex items-center mt-1">
         <span className="text-yellow-500">★</span>
-        <span className="text-gray-600 ml-1">{professional.Rating ? professional.Rating.toFixed(1) : 'N/A'}</span>
+        <span className="text-gray-600 ml-1">{professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'}</span>
       </div>
     </div>
   </div>
@@ -217,17 +244,17 @@ const ProfessionalDetails = ({ professional, onBack, onBookNow }) => (
       &larr; Back to List
     </button>
     <div className="flex flex-col items-center">
-      <img 
-        src={professional.ProfilePictureURL || `https://placehold.co/128x128/E2E8F0/4A5568?text=${professional.FirstName.charAt(0)}`} 
+      <img
+        src={professional.ProfilePictureURL || `https://placehold.co/128x128/E2E8F0/4A5568?text=${professional.FirstName?.charAt(0) || 'P'}`}
         alt={`${professional.FirstName} ${professional.LastName}`}
         className="w-32 h-32 rounded-full mb-4 border-4 border-blue-300"
-        onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/128x128/E2E8F0/4A5568?text=${professional.FirstName.charAt(0)}`; }}
+        onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/128x128/E2E8F0/4A5568?text=${professional.FirstName?.charAt(0) || 'P'}`; }}
       />
       <h2 className="text-2xl font-bold text-gray-800">{`${professional.FirstName} ${professional.LastName}`}</h2>
       <p className="text-lg text-blue-600 font-semibold">{professional.ServiceType}</p>
       <div className="flex items-center my-2">
         <span className="text-yellow-500 text-xl">★</span>
-        <span className="text-gray-700 ml-2 text-lg">{professional.Rating ? professional.Rating.toFixed(1) : 'N/A'} / 5.0</span>
+        <span className="text-gray-700 ml-2 text-lg">{professional.Rating ? Number(professional.Rating).toFixed(1) : 'N/A'} / 5.0</span>
       </div>
       {professional.IsVerified && (
         <div className="bg-green-100 text-green-800 text-sm font-semibold px-3 py-1 rounded-full">
@@ -268,8 +295,8 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="address" className="block text-gray-700 font-semibold mb-2">Address</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               id="address"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
@@ -280,8 +307,8 @@ const BookingModal = ({ professional, onClose, onConfirm }) => {
           </div>
           <div className="mb-6">
             <label htmlFor="dateTime" className="block text-gray-700 font-semibold mb-2">Preferred Date & Time</label>
-            <input 
-              type="datetime-local" 
+            <input
+              type="datetime-local"
               id="dateTime"
               value={dateTime}
               onChange={(e) => setDateTime(e.target.value)}
