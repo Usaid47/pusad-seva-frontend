@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 // --- Configuration ---
-// FIXED: We no longer need the full API_BASE_URL. We will use relative paths.
-const FRONTEND_URL = 'https://purple-field-07c264000.1.azurestaticapps.net';
+// With a linked API, we no longer need to define the base URLs.
+// All API and auth calls will be relative to the current domain.
 
 // --- Main App Component ---
 export default function App() {
@@ -19,15 +19,16 @@ export default function App() {
     if (window.location.hash.includes("#token=")) {
       window.location.hash = "";
       window.location.reload();
-      return;
+      return; // Stop further execution on this render
     }
 
     const checkUserAuth = async () => {
       try {
-        // FIXED: Call the relative path. The SWA will proxy this to the backend.
+        // FIXED: Use relative path. The SWA will proxy this to the linked API.
         const response = await fetch(`/.auth/me`);
         if (response.ok) {
           const data = await response.json();
+          // The user data is in the clientPrincipal object
           if (data.clientPrincipal) {
             setUser(data.clientPrincipal);
           }
@@ -41,14 +42,15 @@ export default function App() {
       try {
         setIsLoading(true);
         setError(null);
-        // FIXED: Call the relative API path.
+        // FIXED: Use relative path.
         const response = await fetch(`/api/professionals`);
         if (!response.ok) {
           throw new Error('Failed to fetch data from the server.');
         }
         const data = await response.json();
         setProfessionals(data);
-      } catch (err) {
+      } catch (err)
+      {
         setError(err.message);
       } finally {
         setIsLoading(false);
@@ -71,7 +73,7 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // The login link is now relative to the SWA domain
+      // FIXED: Login URL is now relative
       window.location.href = `/.auth/login/aad`;
       return;
     }
@@ -90,7 +92,7 @@ export default function App() {
 
     const finalBookingDetails = {
       ...bookingDetails,
-      customerId: user.userId,
+      customerId: user.userId, // Use userId from clientPrincipal
     };
 
     try {
@@ -185,7 +187,6 @@ const Header = ({ user }) => {
   );
 };
 
-// ... (The rest of the components remain the same)
 const ProfessionalList = ({ professionals, onSelect }) => (
   <div>
     <h2 className="text-xl font-semibold text-gray-700 mb-4">Verified Professionals</h2>
