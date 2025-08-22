@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 // --- Configuration ---
-// With a linked API, we no longer need to define the base URLs.
-// All API and auth calls will be relative to the current domain.
+const API_BASE_URL = 'https://pusadseva-api.azurewebsites.net';
+const FRONTEND_URL = 'https://purple-field-07c264000.1.azurestaticapps.net';
 
 // --- Main App Component ---
 export default function App() {
@@ -24,13 +24,17 @@ export default function App() {
 
     const checkUserAuth = async () => {
       try {
-        // FIXED: Use relative path. The SWA will proxy this to the linked API.
-        const response = await fetch(`/.auth/me`);
+        const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
-          // The user data is in the clientPrincipal object
-          if (data.clientPrincipal) {
-            setUser(data.clientPrincipal);
+          if (data && data[0] && data[0].user_id) {
+            const claims = (data[0].user_claims || []);
+            const nameClaim = claims.find(c => c.typ === 'name');
+            const userData = {
+              ...data[0],
+              displayName: nameClaim ? nameClaim.val : data[0].user_id,
+            };
+            setUser(userData);
           }
         }
       } catch (err) {
@@ -42,15 +46,13 @@ export default function App() {
       try {
         setIsLoading(true);
         setError(null);
-        // FIXED: Use relative path.
-        const response = await fetch(`/api/professionals`);
+        const response = await fetch(`${API_BASE_URL}/api/professionals`, { credentials: 'include' });
         if (!response.ok) {
           throw new Error('Failed to fetch data from the server.');
         }
         const data = await response.json();
         setProfessionals(data);
-      } catch (err)
-      {
+      } catch (err) {
         setError(err.message);
       } finally {
         setIsLoading(false);
@@ -73,8 +75,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      // FIXED: Login URL is now relative
-      window.location.href = `/.auth/login/aad`;
+      const redirectUrl = encodeURIComponent(window.location.href);
+      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
       return;
     }
     setIsBooking(true);
@@ -92,16 +94,20 @@ export default function App() {
 
     const finalBookingDetails = {
       ...bookingDetails,
-      customerId: user.userId, // Use userId from clientPrincipal
+      // FIXED: The database expects an integer for CustomerID.
+      // In a real app, you would look up the customer's numerical ID.
+      // For this demo, we'll use a placeholder number.
+      customerId: 101, 
     };
 
     try {
-      const response = await fetch(`/api/bookings`, {
+      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(finalBookingDetails),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -160,9 +166,9 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  // FIXED: Login and logout URLs are now relative
-  const loginUrl = `/.auth/login/aad`;
-  const logoutUrl = `/.auth/logout`;
+  const redirectUrl = encodeURIComponent(FRONTEND_URL);
+  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
+  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
@@ -171,7 +177,7 @@ const Header = ({ user }) => {
         <div>
           {user ? (
             <div className="flex items-center gap-4">
-              <span className="font-semibold">{user.userDetails}</span>
+              <span className="font-semibold">{user.displayName}</span>
               <a href={logoutUrl} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
                 Logout
               </a>
