@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 // --- Configuration ---
-const API_BASE_URL = 'https://pusadseva-api.azurewebsites.net';
+// FIXED: We no longer need the full API_BASE_URL. We will use relative paths.
 const FRONTEND_URL = 'https://purple-field-07c264000.1.azurestaticapps.net';
 
 // --- Main App Component ---
@@ -19,23 +19,17 @@ export default function App() {
     if (window.location.hash.includes("#token=")) {
       window.location.hash = "";
       window.location.reload();
-      return; // Stop further execution on this render
+      return;
     }
 
     const checkUserAuth = async () => {
       try {
-        // FIXED: Added { credentials: 'include' } to send the auth cookie
-        const response = await fetch(`${API_BASE_URL}/.auth/me`, { credentials: 'include' });
+        // FIXED: Call the relative path. The SWA will proxy this to the backend.
+        const response = await fetch(`/.auth/me`);
         if (response.ok) {
           const data = await response.json();
-          if (data && data[0] && data[0].user_id) {
-            const claims = (data[0].user_claims || []);
-            const nameClaim = claims.find(c => c.typ === 'name');
-            const userData = {
-              ...data[0],
-              displayName: nameClaim ? nameClaim.val : data[0].user_id,
-            };
-            setUser(userData);
+          if (data.clientPrincipal) {
+            setUser(data.clientPrincipal);
           }
         }
       } catch (err) {
@@ -47,8 +41,8 @@ export default function App() {
       try {
         setIsLoading(true);
         setError(null);
-        // Add credentials here as well for consistency
-        const response = await fetch(`${API_BASE_URL}/api/professionals`, { credentials: 'include' });
+        // FIXED: Call the relative API path.
+        const response = await fetch(`/api/professionals`);
         if (!response.ok) {
           throw new Error('Failed to fetch data from the server.');
         }
@@ -77,8 +71,8 @@ export default function App() {
   const handleOpenBookingModal = () => {
     if (!user) {
       alert("Please log in to book a service.");
-      const redirectUrl = encodeURIComponent(window.location.href);
-      window.location.href = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
+      // The login link is now relative to the SWA domain
+      window.location.href = `/.auth/login/aad`;
       return;
     }
     setIsBooking(true);
@@ -96,17 +90,16 @@ export default function App() {
 
     const finalBookingDetails = {
       ...bookingDetails,
-      customerId: user.user_id,
+      customerId: user.userId,
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+      const response = await fetch(`/api/bookings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(finalBookingDetails),
-        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -165,9 +158,9 @@ export default function App() {
 // --- UI Components ---
 
 const Header = ({ user }) => {
-  const redirectUrl = encodeURIComponent(FRONTEND_URL);
-  const loginUrl = `${API_BASE_URL}/.auth/login/aad?post_login_redirect_uri=${redirectUrl}`;
-  const logoutUrl = `${API_BASE_URL}/.auth/logout?post_logout_redirect_uri=${redirectUrl}`;
+  // FIXED: Login and logout URLs are now relative
+  const loginUrl = `/.auth/login/aad`;
+  const logoutUrl = `/.auth/logout`;
 
   return (
     <header className="bg-blue-600 text-white shadow-md">
@@ -176,7 +169,7 @@ const Header = ({ user }) => {
         <div>
           {user ? (
             <div className="flex items-center gap-4">
-              <span className="font-semibold">{user.displayName}</span>
+              <span className="font-semibold">{user.userDetails}</span>
               <a href={logoutUrl} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
                 Logout
               </a>
@@ -192,6 +185,7 @@ const Header = ({ user }) => {
   );
 };
 
+// ... (The rest of the components remain the same)
 const ProfessionalList = ({ professionals, onSelect }) => (
   <div>
     <h2 className="text-xl font-semibold text-gray-700 mb-4">Verified Professionals</h2>
