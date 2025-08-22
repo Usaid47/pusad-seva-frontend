@@ -19,7 +19,7 @@ export default function App() {
     if (window.location.hash.includes("#token=")) {
       window.location.hash = "";
       window.location.reload();
-      return;
+      return; // Stop further execution on this render
     }
 
     const checkUserAuth = async () => {
